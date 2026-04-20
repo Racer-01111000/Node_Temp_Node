@@ -1,0 +1,3 @@
+{"topic":"quantum_computing","type":"concept","content":"Quantum systems use superposition and entanglement to perform computation beyond classical limits.","state":"UNVERIFIED"}
+{"topic":"quantum_error_correction","type":"concept","content":"Quantum error correction protects quantum information from decoherence using redundancy and encoding.","state":"UNVERIFIED"}
+{"topic":"heterogeneous_compute","type":"concept","content":"Modern systems use multiple specialized accelerators to optimize performance and energy efficiency.","state":"VERIFIED"}

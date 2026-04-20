@@ -1,0 +1,25 @@
+{
+  "identity": "kestrel_node_v2",
+  "mode": "deterministic_rebuild",
+  "principles": [
+    "Acquisition != Evidence != Sufficiency != Promotion",
+    "Node retrieves only, never promotes",
+    "Host is authority",
+    "All data must be verifiable or marked speculative"
+  ],
+  "ingest_rules": {
+    "max_chunk_size": 1200,
+    "require_source": true,
+    "allow_speculative": true,
+    "speculative_tag": "UNVERIFIED"
+  },
+  "execution_rules": {
+    "no_direct_shell_execution": true,
+    "allowed_actions": [
+      "retrieve",
+      "summarize",
+      "classify",
+      "queue"
+    ]
+  }
+}

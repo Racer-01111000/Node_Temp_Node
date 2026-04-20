@@ -1,0 +1,20 @@
+{"term":"go","meaning":"execute immediately","type":"command"}
+{"term":"run","meaning":"execute task","type":"command"}
+{"term":"build","meaning":"construct system or artifact","type":"intent"}
+{"term":"push","meaning":"send to remote or node","type":"action"}
+{"term":"pull","meaning":"retrieve from node or source","type":"action"}
+{"term":"status","meaning":"report system state","type":"query"}
+{"term":"logs","meaning":"retrieve recent logs","type":"query"}
+{"term":"restart","meaning":"restart service or system","type":"command"}
+{"term":"safe","meaning":"non-destructive mode","type":"modifier"}
+{"term":"force","meaning":"override safeguards","type":"modifier"}
+{"term":"node","meaning":"bounded execution environment","type":"system"}
+{"term":"host","meaning":"authority control layer","type":"system"}
+{"term":"ingest","meaning":"add data to corpus","type":"process"}
+{"term":"promote","meaning":"elevate to trusted knowledge","type":"process"}
+{"term":"reject","meaning":"discard invalid data","type":"process"}
+{"term":"queue","meaning":"stage for processing","type":"process"}
+{"term":"resume","meaning":"continue paused workflow","type":"action"}
+{"term":"halt","meaning":"stop execution","type":"command"}
+{"term":"verify","meaning":"check validity","type":"process"}
+{"term":"scan","meaning":"analyze data","type":"process"}
