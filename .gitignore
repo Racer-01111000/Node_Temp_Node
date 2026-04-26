@@ -1,0 +1,8 @@
+
+# Runtime/generated NODE artifacts
+metadata/ingest_logs/*.log
+runtime/offload_list.jsonl
+runtime/validation_queue.jsonl
+runtime/semantic_scholar_rate_state.json
+__pycache__/
+*.pyc
