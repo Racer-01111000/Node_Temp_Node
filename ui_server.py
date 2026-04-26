@@ -14,6 +14,12 @@ PROCESSED = BASE / "metadata/ingest_logs/processed.json"
 BRIDGE_INBOX = Path.home() / "GPT_Firefox_extension/control/inbox/current.json"
 BRIDGE_OUTBOX = Path.home() / "GPT_Firefox_extension/control/outbox"
 
+VALIDATION_QUEUE = BASE / "runtime/validation_queue.jsonl"
+VALIDATION_STATE = BASE / "runtime/validation_state.json"
+VALIDATION_LOG = BASE / "metadata/validation_logs/w3m_validation.jsonl"
+OFFLOAD_LIST = BASE / "runtime/offload_list.jsonl"
+ARCHIVE_DIR = BASE / "archive/offloaded_batches"
+
 PAPER_SOURCES = ["arxiv_feed.jsonl", "semantic_scholar_feed.jsonl"]
 
 ACCEPTED_STATES = frozenset({"ACCEPTED", "accepted"})
@@ -240,6 +246,98 @@ def queue_manual_ingest(source_path: str, mode: str, source_type: str, tags: str
     return {"job_id": job_id, "status": "queued", "command": command}
 
 
+def validation_summary() -> dict:
+    # Queue counts
+    total_q, pending_q, done_q = 0, 0, 0
+    if VALIDATION_QUEUE.exists():
+        with VALIDATION_QUEUE.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    total_q += 1
+                    if r.get("validation_status") in ("done", "failed_permanent", "validated"):
+                        done_q += 1
+                    else:
+                        pending_q += 1
+                except json.JSONDecodeError:
+                    pass
+
+    # State
+    state = {}
+    if VALIDATION_STATE.exists():
+        try:
+            state = json.loads(VALIDATION_STATE.read_text())
+        except Exception:
+            pass
+
+    # Recent log entries
+    recent_log = []
+    if VALIDATION_LOG.exists():
+        try:
+            lines = VALIDATION_LOG.read_text(encoding="utf-8").splitlines()
+            for line in reversed(lines[-20:]):
+                if line.strip():
+                    try:
+                        recent_log.append(json.loads(line))
+                    except Exception:
+                        pass
+            recent_log = recent_log[:10]
+        except Exception:
+            pass
+
+    return {
+        "queue_total": total_q,
+        "queue_pending": pending_q,
+        "queue_done": done_q,
+        "total_attempts": state.get("total_attempts", 0),
+        "last_attempt_at": state.get("last_attempt_at"),
+        "target_per_hour": 60,
+        "recent_log": recent_log,
+    }
+
+
+def offload_summary() -> dict:
+    total, pending, archived_count = 0, 0, 0
+    recent = []
+    if OFFLOAD_LIST.exists():
+        with OFFLOAD_LIST.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    total += 1
+                    if r.get("archived"):
+                        archived_count += 1
+                    else:
+                        pending += 1
+                    recent.append(r)
+                except json.JSONDecodeError:
+                    pass
+    recent = list(reversed(recent))[:10]
+
+    archives = []
+    if ARCHIVE_DIR.exists():
+        for mf in sorted(ARCHIVE_DIR.glob("*.manifest.json"), reverse=True)[:5]:
+            try:
+                archives.append(json.loads(mf.read_text()))
+            except Exception:
+                archives.append({"path": str(mf), "error": "unreadable"})
+
+    return {
+        "offload_total": total,
+        "pending_archive": pending,
+        "already_archived": archived_count,
+        "archive_trigger": 100,
+        "archives": archives,
+        "recent_offloads": recent,
+    }
+
+
 def get_ingest_status() -> dict:
     recent = []
     if BRIDGE_OUTBOX.exists():
@@ -353,6 +451,8 @@ def render() -> str:
     <div class="tab" data-tab="elevated">Elevated</div>
     <div class="tab" data-tab="truthgate">Truth Gate</div>
     <div class="tab" data-tab="manualingest">Manual Ingest</div>
+    <div class="tab" data-tab="validation">Validation</div>
+    <div class="tab" data-tab="offload">Offload Archive</div>
     <div class="tab" data-tab="logs">Logs</div>
   </nav>
 </header>
@@ -453,6 +553,24 @@ def render() -> str:
   <div class="msg" id="ingest-msg"></div>
 </div>
 
+<div id="tab-validation" class="panel">
+  <h2>Validation</h2>
+  <p class="note">
+    Continuous w3m validation — target 60 attempts/hour. Per-domain cooldown 120s.<br>
+    Writes to <span class="path">{VALIDATION_LOG}</span>
+  </p>
+  <div id="validation-container"><p class="loading">Loading…</p></div>
+</div>
+
+<div id="tab-offload" class="panel">
+  <h2>Offload Archive</h2>
+  <p class="note">
+    Consumed/trained documents accumulate in <span class="path">{OFFLOAD_LIST}</span>.<br>
+    Archive created when 100 truth-gate-passed documents are pending.
+  </p>
+  <div id="offload-container"><p class="loading">Loading…</p></div>
+</div>
+
 <div id="tab-logs" class="panel">
   <h2>Recent Ingest Log <small>(last 20 lines)</small></h2>
   <p class="path">{INGEST_LOG}</p>
@@ -462,10 +580,12 @@ def render() -> str:
 <script>
 (function () {{
   var tabLoaders = {{
-    'papers':    loadPapers,
-    'accepted':  loadAccepted,
-    'elevated':  loadElevated,
-    'truthgate': loadTruthGate
+    'papers':     loadPapers,
+    'accepted':   loadAccepted,
+    'elevated':   loadElevated,
+    'truthgate':  loadTruthGate,
+    'validation': loadValidation,
+    'offload':    loadOffload
   }};
   var tabLoaded = {{}};
 
@@ -672,6 +792,85 @@ function queueIngest() {{
     .catch(function () {{ msg.className = 'msg err'; msg.textContent = 'Request failed.'; }});
 }}
 
+// --- Validation ---
+function loadValidation() {{
+  fetch('/api/validation')
+    .then(function (r) {{ return r.json(); }})
+    .then(function (d) {{
+      var el = document.getElementById('validation-container');
+      var logRows = (d.recent_log || []).map(function (e) {{
+        var st = e.status || '—';
+        var color = st === 'validated' ? '#00cc66' : st === 'fetch_error' ? '#f55' : '#aaa';
+        return '<tr>' +
+          '<td style="font-size:0.8em;color:#666">' + esc(e.attempted_at || '') + '</td>' +
+          '<td style="color:' + color + '">' + esc(st) + '</td>' +
+          '<td class="path" style="font-size:0.8em">' + esc(e.url || '—') + '</td>' +
+          '<td style="font-size:0.8em;color:#888">' + esc(e.error || '') + '</td>' +
+          '</tr>';
+      }}).join('');
+      el.innerHTML =
+        '<table class="tg-table"><tr><th colspan="2">Validation State</th></tr>' +
+        '<tr><td>Queue total</td><td>' + d.queue_total + '</td></tr>' +
+        '<tr><td>Pending</td><td>' + d.queue_pending + '</td></tr>' +
+        '<tr><td>Done</td><td>' + d.queue_done + '</td></tr>' +
+        '<tr><td>Total attempts</td><td>' + d.total_attempts + '</td></tr>' +
+        '<tr><td>Last attempt</td><td style="font-size:0.85em;color:#888">' + esc(d.last_attempt_at || '(none)') + '</td></tr>' +
+        '<tr><td>Target rate</td><td>' + d.target_per_hour + ' / hour</td></tr>' +
+        '</table>' +
+        '<h2>Recent Validation Log</h2>' +
+        '<table><tr><th>Attempted at</th><th>Status</th><th>URL</th><th>Error</th></tr>' +
+        (logRows || '<tr><td colspan="4">(no log entries)</td></tr>') +
+        '</table>';
+    }})
+    .catch(function () {{
+      document.getElementById('validation-container').innerHTML =
+        '<p class="empty-note" style="color:#f55">Failed to load validation data.</p>';
+    }});
+}}
+
+// --- Offload Archive ---
+function loadOffload() {{
+  fetch('/api/offload')
+    .then(function (r) {{ return r.json(); }})
+    .then(function (d) {{
+      var el = document.getElementById('offload-container');
+      var archiveRows = (d.archives || []).map(function (a) {{
+        return '<tr>' +
+          '<td class="path" style="font-size:0.8em">' + esc(a.batch_id || '—') + '</td>' +
+          '<td>' + (a.record_count || '—') + '</td>' +
+          '<td style="font-size:0.8em;color:#666">' + esc(a.created_at || '') + '</td>' +
+          '</tr>';
+      }}).join('');
+      var offloadRows = (d.recent_offloads || []).map(function (r) {{
+        return '<tr>' +
+          '<td class="path" style="font-size:0.8em">' + esc(r.doc_id || '—') + '</td>' +
+          '<td>' + stateBadge(r.truth_gate_status) + '</td>' +
+          '<td>' + esc(r.archived ? '✓ archived' : 'pending') + '</td>' +
+          '<td style="font-size:0.8em;color:#666">' + esc(r.consumed_at || r.trained_at || '') + '</td>' +
+          '</tr>';
+      }}).join('');
+      var ready = d.pending_archive >= d.archive_trigger;
+      el.innerHTML =
+        '<table class="tg-table"><tr><th colspan="2">Offload Status</th></tr>' +
+        '<tr><td>Total offload records</td><td>' + d.offload_total + '</td></tr>' +
+        '<tr><td>Pending archive</td><td>' + d.pending_archive +
+          (ready ? ' <span style="color:#f90"> ← threshold reached</span>' : '') + '</td></tr>' +
+        '<tr><td>Already archived</td><td>' + d.already_archived + '</td></tr>' +
+        '<tr><td>Archive trigger</td><td>' + d.archive_trigger + ' records</td></tr>' +
+        '</table>' +
+        '<h2>Archive Batches <small>(' + (d.archives || []).length + ')</small></h2>' +
+        '<table><tr><th>Batch ID</th><th>Records</th><th>Created</th></tr>' +
+        (archiveRows || '<tr><td colspan="3">(no archives yet)</td></tr>') + '</table>' +
+        '<h2>Recent Offload Entries</h2>' +
+        '<table><tr><th>Doc ID</th><th>Truth Gate</th><th>Status</th><th>Consumed at</th></tr>' +
+        (offloadRows || '<tr><td colspan="4">(offload list is empty)</td></tr>') + '</table>';
+    }})
+    .catch(function () {{
+      document.getElementById('offload-container').innerHTML =
+        '<p class="empty-note" style="color:#f55">Failed to load offload data.</p>';
+    }});
+}}
+
 function esc(s) {{
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }}
@@ -704,6 +903,10 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             q = (qs.get("q") or [""])[0].strip()
             self._json({"results": search_files(q) if q else []})
+        elif p == "/api/validation":
+            self._json(validation_summary())
+        elif p == "/api/offload":
+            self._json(offload_summary())
         elif p == "/api/manual-ingest-status":
             self._json(get_ingest_status())
         else:

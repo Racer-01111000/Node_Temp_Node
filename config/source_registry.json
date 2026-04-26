@@ -1,0 +1,98 @@
+{
+  "sources": {
+    "arxiv": {
+      "name": "arXiv",
+      "role": "structured paper feed",
+      "output_file": "training/corpus/arxiv_feed.jsonl",
+      "validation_method": "w3m",
+      "preferred_url_fields": ["arxiv_url", "url", "source_url"],
+      "base_url": "https://arxiv.org/abs/",
+      "enabled": true
+    },
+    "semantic_scholar": {
+      "name": "Semantic Scholar",
+      "role": "metadata / citation / discovery feed",
+      "output_file": "training/corpus/semantic_scholar_feed.jsonl",
+      "validation_method": "w3m",
+      "preferred_url_fields": ["url", "source_url", "semantic_scholar_url"],
+      "base_url": "https://www.semanticscholar.org/paper/",
+      "enabled": true
+    },
+    "ibm_qiskit": {
+      "name": "IBM / Qiskit Documentation",
+      "role": "technical documentation source",
+      "output_file": "training/corpus/ibm_qiskit_feed.jsonl",
+      "validation_method": "w3m",
+      "preferred_url_fields": ["url", "source_url", "doc_url"],
+      "base_url": "https://docs.quantum.ibm.com/",
+      "enabled": true
+    },
+    "prx_aps": {
+      "name": "PRX Quantum / APS",
+      "role": "primary research source",
+      "output_file": "training/corpus/prx_aps_feed.jsonl",
+      "validation_method": "w3m",
+      "preferred_url_fields": ["doi_url", "url", "source_url"],
+      "base_url": "https://journals.aps.org/prxquantum/",
+      "enabled": true
+    },
+    "manual": {
+      "name": "Local / Manual Ingest",
+      "role": "operator-selected local material",
+      "output_file": null,
+      "staging_path": "staging/manual",
+      "validation_method": "local_path",
+      "preferred_url_fields": ["source_path", "path"],
+      "enabled": true
+    },
+    "lexicon": {
+      "name": "Lexicon",
+      "role": "user/project language normalization",
+      "output_file": "training/corpus/lexicon.jsonl",
+      "validation_method": "none",
+      "preferred_url_fields": [],
+      "enabled": true
+    },
+    "generated": {
+      "name": "Generated Quantum Concepts",
+      "role": "generated baseline concepts; always UNVERIFIED until truth gate promotes",
+      "output_file": "training/corpus/generated_core.jsonl",
+      "validation_method": "none",
+      "preferred_url_fields": [],
+      "enabled": true
+    },
+    "truth_gate": {
+      "name": "Truth-Gate Artifacts",
+      "role": "evidence records, validation reports, promotion/rejection reasons",
+      "output_file": null,
+      "report_path": "metadata/truth_gate_reports",
+      "validation_method": "internal",
+      "preferred_url_fields": [],
+      "enabled": true
+    },
+    "llama_candidates": {
+      "name": "LLaMA Corpus Candidates",
+      "role": "curated records for downstream LLaMA quantum training and RAG",
+      "output_file": null,
+      "candidates_path": "training/candidates",
+      "ready_path": "training/llama_ready",
+      "archive_path": "archive/offloaded_batches",
+      "validation_method": "truth_gate_required",
+      "preferred_url_fields": [],
+      "enabled": true
+    }
+  },
+  "validation": {
+    "validation_attempts_per_hour": 60,
+    "min_seconds_between_attempts": 60,
+    "per_domain_min_seconds": 120,
+    "failure_backoff_seconds": 600,
+    "max_fetch_seconds": 30,
+    "max_text_bytes": 250000
+  },
+  "offload": {
+    "archive_trigger_count": 100,
+    "archive_path": "archive/offloaded_batches",
+    "offload_list_path": "runtime/offload_list.jsonl"
+  }
+}
