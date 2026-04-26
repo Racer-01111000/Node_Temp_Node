@@ -5,7 +5,11 @@
       "role": "structured paper feed",
       "output_file": "training/corpus/arxiv_feed.jsonl",
       "validation_method": "w3m",
-      "preferred_url_fields": ["arxiv_url", "url", "source_url"],
+      "preferred_url_fields": [
+        "arxiv_url",
+        "url",
+        "source_url"
+      ],
       "base_url": "https://arxiv.org/abs/",
       "enabled": true
     },
@@ -14,14 +18,21 @@
       "role": "metadata / citation / discovery feed",
       "output_file": "training/corpus/semantic_scholar_feed.jsonl",
       "auth": "env:S2_API_KEY",
-      "validation_method": ["semantic_scholar_api", "w3m_live_validation"],
-      "preferred_url_fields": ["url", "source_url", "semantic_scholar_url"],
+      "validation_method": [
+        "semantic_scholar_api",
+        "w3m_live_validation"
+      ],
+      "preferred_url_fields": [
+        "url",
+        "source_url",
+        "semantic_scholar_url"
+      ],
       "base_url": "https://www.semanticscholar.org/paper/",
       "rate_limit": {
-        "requests_per_second": 0.5,
-        "limit_per_query": 10,
-        "backoff_429_initial": 30,
-        "backoff_429_max": 300
+        "requests_per_minute": 1,
+        "min_seconds_between_requests": 62,
+        "ip_bound": true,
+        "state_file": "runtime/semantic_scholar_rate_state.json"
       },
       "enabled": true
     },
@@ -30,7 +41,11 @@
       "role": "technical documentation source",
       "output_file": "training/corpus/ibm_qiskit_feed.jsonl",
       "validation_method": "w3m",
-      "preferred_url_fields": ["url", "source_url", "doc_url"],
+      "preferred_url_fields": [
+        "url",
+        "source_url",
+        "doc_url"
+      ],
       "base_url": "https://docs.quantum.ibm.com/",
       "enabled": true
     },
@@ -39,7 +54,11 @@
       "role": "primary research source",
       "output_file": "training/corpus/prx_aps_feed.jsonl",
       "validation_method": "w3m",
-      "preferred_url_fields": ["doi_url", "url", "source_url"],
+      "preferred_url_fields": [
+        "doi_url",
+        "url",
+        "source_url"
+      ],
       "base_url": "https://journals.aps.org/prxquantum/",
       "enabled": true
     },
@@ -49,7 +68,10 @@
       "output_file": null,
       "staging_path": "staging/manual",
       "validation_method": "local_path",
-      "preferred_url_fields": ["source_path", "path"],
+      "preferred_url_fields": [
+        "source_path",
+        "path"
+      ],
       "enabled": true
     },
     "lexicon": {

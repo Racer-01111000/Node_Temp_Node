@@ -799,34 +799,88 @@ function loadTruthGate() {{
 // --- Manual ingest search / queue ---
 function searchFiles() {{
   var q = document.getElementById('search-query').value.trim();
-  if (!q) return;
   var el = document.getElementById('search-results');
+  var msg = document.getElementById('ingest-msg');
+
+  if (!el) {{
+    if (msg) {{
+      msg.className = 'msg err';
+      msg.textContent = 'Search UI error: missing search-results element.';
+    }}
+    return;
+  }}
+
   el.style.display = 'block';
-  el.innerHTML = '<div class="result" style="color:#666">(searching…)</div>';
-  fetch('/api/search-files?q=' + encodeURIComponent(q))
-    .then(function (r) {{ return r.json(); }})
+  el.innerHTML = '';
+
+  if (!q) {{
+    el.innerHTML = '<div class="result" style="color:#f5c542">(enter a search term)</div>';
+    if (msg) {{
+      msg.className = 'msg err';
+      msg.textContent = 'Enter a filename keyword or path fragment first.';
+    }}
+    return;
+  }}
+
+  el.innerHTML = '<div class="result" style="color:#888">(searching...)</div>';
+  if (msg) {{
+    msg.className = 'msg pending';
+    msg.textContent = 'Searching files...';
+  }}
+
+  fetch('/api/search-files?q=' + encodeURIComponent(q), {{ cache: 'no-store' }})
+    .then(function (r) {{
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }})
     .then(function (data) {{
       var results = data.results || [];
+      el.innerHTML = '';
+      el.style.display = 'block';
+
       if (!results.length) {{
-        el.innerHTML = '<div class="result" style="color:#666">(no results)</div>';
+        el.innerHTML = '<div class="result" style="color:#888">(no results)</div>';
+        if (msg) {{
+          msg.className = 'msg err';
+          msg.textContent = 'No matching files found.';
+        }}
         return;
       }}
-      el.innerHTML = '';
+
       results.forEach(function (p) {{
         var d = document.createElement('div');
         d.className = 'result';
         d.textContent = p;
+        d.style.display = 'block';
+        d.style.padding = '6px 10px';
+        d.style.cursor = 'pointer';
+        d.style.borderBottom = '1px solid #222';
         d.addEventListener('click', function () {{
           document.getElementById('source-path').value = p;
           el.style.display = 'none';
+          if (msg) {{
+            msg.className = 'msg ok';
+            msg.textContent = 'Selected: ' + p;
+          }}
         }});
         el.appendChild(d);
       }});
+
+      if (msg) {{
+        msg.className = 'msg ok';
+        msg.textContent = 'Found ' + results.length + ' file(s). Click one to fill Source path.';
+      }}
     }})
-    .catch(function () {{
-      el.innerHTML = '<div class="result" style="color:#f55">(search error)</div>';
+    .catch(function (err) {{
+      el.style.display = 'block';
+      el.innerHTML = '<div class="result" style="color:#ff5555">(search error)</div>';
+      if (msg) {{
+        msg.className = 'msg err';
+        msg.textContent = 'Search failed: ' + err.message;
+      }}
     }});
 }}
+
 
 function queueIngest() {{
   var source_path = document.getElementById('source-path').value.trim();
@@ -959,6 +1013,9 @@ function esc(s) {{
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }}
 </script>
+
+
+
 </body>
 </html>"""
 
