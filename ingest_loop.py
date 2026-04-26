@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 import time
 
-CORPUS = Path.home() / "Node_Temp/training/corpus"
-LOG = Path.home() / "Node_Temp/metadata/ingest_logs/ingest.log"
-PROCESSED_STATE = Path.home() / "Node_Temp/metadata/ingest_logs/processed.json"
+CORPUS = Path.home() / "Node_Temp_Node/training/corpus"
+LOG = Path.home() / "Node_Temp_Node/metadata/ingest_logs/ingest.log"
+PROCESSED_STATE = Path.home() / "Node_Temp_Node/metadata/ingest_logs/processed.json"
 
 def log(msg):
     with open(LOG, "a") as f:

@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 import json
 from pathlib import Path
 
-OUT = Path.home() / "Node_Temp/training/corpus/arxiv_feed.jsonl"
+OUT = Path.home() / "Node_Temp_Node/training/corpus/arxiv_feed.jsonl"
 
 ARXIV_URL = "http://export.arxiv.org/api/query?search_query=all:quantum+computing&start=0&max_results=20"
 

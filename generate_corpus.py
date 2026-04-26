@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-OUT = Path.home() / "Node_Temp/training/corpus/generated_core.jsonl"
+OUT = Path.home() / "Node_Temp_Node/training/corpus/generated_core.jsonl"
 
 topics = [
     "quantum_computing",
