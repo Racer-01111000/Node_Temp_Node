@@ -6,3 +6,6 @@ runtime/validation_queue.jsonl
 runtime/semantic_scholar_rate_state.json
 __pycache__/
 *.pyc
+
+# Manual ingest staged outputs (generated at runtime)
+staging/manual/
