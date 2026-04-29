@@ -13,6 +13,8 @@ import json
 import random
 import re
 import subprocess
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
@@ -27,6 +29,126 @@ _INGEST_FILE  = Path.home() / ".kestrel-node/runtime/state/ingest_state.json"
 _RUNTIME_DIR  = Path.home() / "kestrel-memory/runtime"
 _STAGED_DIR   = Path.home() / "kestrel-memory/knowledge/staged"
 _TZ_OFFSET    = timedelta(hours=7)  # Asia/Saigon
+
+_OLLAMA_URL   = "http://127.0.0.1:11434"
+_OLLAMA_MODEL = "phi3:mini"
+
+_CORPUS_DIRS  = [
+    _NODE_BASE / "training/llama_ready",
+    _NODE_BASE / "training/candidates",
+]
+
+_KESTREL_SYSTEM = (
+    "You are Kestrel, a quantum-ready AI assistant built on curated, peer-reviewed "
+    "quantum computing research. You reason from validated papers — not speculation. "
+    "When the corpus supports an answer, cite it. When it doesn't, say so plainly. "
+    "You are concise, precise, and technically grounded. Rick is your operator."
+)
+
+
+# ---------------------------------------------------------------------------
+# Ollama / RAG
+# ---------------------------------------------------------------------------
+
+def _ollama_available(model: str = _OLLAMA_MODEL) -> bool:
+    try:
+        req = urllib.request.Request(f"{_OLLAMA_URL}/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+            models = [m.get("name", "") for m in data.get("models", [])]
+            return any(model in m for m in models)
+    except Exception:
+        return False
+
+
+def _corpus_search(query: str, n: int = 3) -> list:
+    """Return up to n corpus records most relevant to query by keyword overlap."""
+    keywords = set(re.sub(r"[^\w\s]", "", query.lower()).split()) - {
+        "the", "a", "an", "is", "in", "of", "to", "and", "for", "with", "what",
+        "how", "why", "does", "can", "are", "be", "that", "this", "it", "on",
+    }
+    if not keywords:
+        return []
+    scored = []
+    for corpus_dir in _CORPUS_DIRS:
+        if not corpus_dir.exists():
+            continue
+        for path in corpus_dir.glob("*.json"):
+            try:
+                rec = json.loads(path.read_text())
+                text = (
+                    (rec.get("corpus_record") or {}).get("content", "")
+                    or rec.get("content", "")
+                    or rec.get("title", "")
+                ).lower()
+                score = sum(1 for kw in keywords if kw in text)
+                if score > 0:
+                    scored.append((score, rec))
+            except Exception:
+                pass
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [r for _, r in scored[:n]]
+
+
+def _build_rag_context(records: list) -> str:
+    parts = []
+    for i, rec in enumerate(records, 1):
+        cr = rec.get("corpus_record") or {}
+        content = cr.get("content") or rec.get("content") or rec.get("title") or ""
+        title = rec.get("title") or content.split(": ", 1)[0]
+        arxiv = rec.get("arxiv_id") or cr.get("arxiv_id") or ""
+        ref = f"arXiv:{arxiv}" if arxiv else rec.get("paper_id", "")
+        parts.append(f"[{i}] {title} ({ref})\n{content[:500]}")
+    return "\n\n".join(parts)
+
+
+def _ollama_ask(user_text: str, context: str = "", model: str = _OLLAMA_MODEL) -> Optional[str]:
+    prompt_parts = [_KESTREL_SYSTEM]
+    if context:
+        prompt_parts.append(f"\nRelevant corpus excerpts:\n{context}")
+    prompt_parts.append(f"\nOperator: {user_text}")
+    prompt = "\n".join(prompt_parts)
+
+    payload = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"num_predict": 400},
+    }).encode()
+    req = urllib.request.Request(
+        f"{_OLLAMA_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read())
+            return data.get("response", "").strip()
+    except Exception:
+        return None
+
+
+def kestrel_llm_response(text: str) -> str:
+    """Route substantive query through corpus RAG + Ollama. Falls back gracefully."""
+    if not _ollama_available():
+        return (
+            "Ollama is not running. Start it with:\n"
+            "  sudo systemctl start ollama\n"
+            "  ollama pull phi3:mini"
+        )
+    records = _corpus_search(text)
+    context = _build_rag_context(records) if records else ""
+    reply = _ollama_ask(text, context)
+    if reply is None:
+        return build_error_soft("Ollama call failed")
+    if records:
+        sources = ", ".join(
+            r.get("arxiv_id") or r.get("paper_id", "?")
+            for r in records
+        )
+        reply += f"\n\n[corpus: {sources}]"
+    return reply
 
 
 # ---------------------------------------------------------------------------
@@ -128,8 +250,8 @@ def build_ack() -> str:
 def build_help() -> str:
     return (
         "Commands: update · staged · confirm · promote · verify\n"
-        "Send a file to stage it for manual ingest.\n"
-        "Or tell me what you're working on."
+        "Ask me anything about quantum computing — I'll search the corpus.\n"
+        "Send a URL to stage it. Send a file to ingest it."
     )
 
 
@@ -341,9 +463,9 @@ def dispatch_command(text: str) -> str:
     if low.startswith("http"):
         return _cmd_fetch_url(text.strip())
     if len(text) > 100:
-        return _cmd_stage_text(text)
+        return kestrel_llm_response(text)
 
-    return build_help()
+    return kestrel_llm_response(text)
 
 
 # ---------------------------------------------------------------------------

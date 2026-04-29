@@ -298,7 +298,20 @@ def run(once: bool = False, dry_run: bool = False) -> int:
             time.sleep(min_seconds)
             continue
 
-        candidate = queue[0]
+        cooldown = cfg.get("per_domain_min_seconds", PER_DOMAIN_SECONDS)
+        candidate = None
+        for c in queue:
+            u = best_url_for(c)
+            d = domain_of(u) if u else ""
+            if not d or can_attempt_domain(state, d, cooldown):
+                candidate = c
+                break
+
+        if candidate is None:
+            print("[validate_w3m_loop] all candidates on domain cooldown, sleeping", flush=True)
+            time.sleep(cooldown)
+            continue
+
         cid = candidate_id_of(candidate)
         url = best_url_for(candidate)
 

@@ -1250,8 +1250,8 @@ function fetchW3m() {{
 var _consolePending = false;
 function _consoleAppend(who, text) {{
   var log = document.getElementById('console-log');
-  var prefix = who === 'kestrel' ? 'Kestrel\n' : '→ ';
-  log.textContent += prefix + text + '\n\n';
+  var prefix = who === 'kestrel' ? 'Kestrel\\n' : '→ ';
+  log.textContent += prefix + text + '\\n\\n';
   log.scrollTop = log.scrollHeight;
 }}
 
@@ -1400,7 +1400,41 @@ function esc(s) {{
 }}
 </script>
 
+<script>
+(function() {{
+  var loaderMap = {{
+    papers:     loadPapers,
+    accepted:   loadAccepted,
+    elevated:   loadElevated,
+    truthgate:  loadTruthGate,
+    validation: loadValidation,
+    offload:    loadOffload,
+    console:    loadConsole
+  }};
+  var loaded = {{}};
 
+  document.addEventListener('click', function(e) {{
+    var tab = e.target.closest('.tab');
+    if (!tab) return;
+    var name = tab.getAttribute('data-tab');
+    if (!name) return;
+
+    document.querySelectorAll('.tab').forEach(function(t) {{ t.classList.remove('active'); }});
+    document.querySelectorAll('.panel').forEach(function(p) {{ p.classList.remove('active'); }});
+    tab.classList.add('active');
+    var panel = document.getElementById('tab-' + name);
+    if (panel) panel.classList.add('active');
+
+    if (name === 'manualingest') {{
+      loadTelegramFiles();
+      fbLoad(null);
+    }} else if (loaderMap[name] && !loaded[name]) {{
+      loaderMap[name]();
+      loaded[name] = true;
+    }}
+  }}, true);
+}})();
+</script>
 
 </body>
 </html>"""

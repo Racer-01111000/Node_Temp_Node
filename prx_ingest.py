@@ -1,27 +1,35 @@
 #!/usr/bin/env python3
 """
-Bounded arXiv ingest with offset rotation and deduplication.
+PRX Quantum ingest via arXiv journal-ref search.
 
-Each run fetches the next page of results (20 papers) by advancing the
-offset stored in runtime/arxiv_ingest_state.json. Skips papers whose
-content hash already exists in arxiv_feed.jsonl or validation_queue.jsonl.
+Searches arXiv for papers with journal-ref containing "PRX Quantum".
+These are peer-reviewed papers published in Physical Review X Quantum
+that authors have also deposited on arXiv.
+
+Rate: respects arXiv's polite use policy (3s between requests).
+State: runtime/prx_ingest_state.json tracks offset.
+Output: training/corpus/prx_aps_feed.jsonl + validation queue.
 """
 import hashlib
 import json
 import sys
+import time
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
 BASE = Path.home() / "NODE"
-OUT = BASE / "training/corpus/arxiv_feed.jsonl"
-STATE = BASE / "runtime/arxiv_ingest_state.json"
+OUT = BASE / "training/corpus/prx_aps_feed.jsonl"
+STATE = BASE / "runtime/prx_ingest_state.json"
 VALIDATION_QUEUE = BASE / "runtime/validation_queue.jsonl"
 
 ARXIV_BASE = "http://export.arxiv.org/api/query"
-SEARCH_QUERY = "all:quantum+computing"
+# journal-ref search for PRX Quantum papers
+SEARCH_QUERY = 'jrn:"PRX Quantum"'
 PAGE_SIZE = 20
+SECONDS_BETWEEN_REQUESTS = 3
 NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 
@@ -65,10 +73,14 @@ def load_seen_hashes():
 
 
 def fetch(offset):
-    url = (
-        f"{ARXIV_BASE}?search_query={SEARCH_QUERY}"
-        f"&start={offset}&max_results={PAGE_SIZE}&sortBy=submittedDate&sortOrder=descending"
-    )
+    params = urllib.parse.urlencode({
+        "search_query": SEARCH_QUERY,
+        "start": offset,
+        "max_results": PAGE_SIZE,
+        "sortBy": "submittedDate",
+        "sortOrder": "descending",
+    })
+    url = f"{ARXIV_BASE}?{params}"
     req = urllib.request.Request(url, headers={"User-Agent": "NODE/1.0 (kestrel-node research)"})
     with urllib.request.urlopen(req, timeout=20) as resp:
         return resp.read().decode("utf-8")
@@ -92,13 +104,15 @@ def parse(xml_data):
         content = f"{title}: {summary}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()
         entries.append({
-            "topic": "arxiv_quantum",
+            "topic": "prx_quantum",
             "type": "paper",
             "content": content,
             "state": "UNVERIFIED",
             "arxiv_id": arxiv_id,
-            "source": "arxiv",
+            "source": "prx_quantum_via_arxiv",
             "source_url": f"https://arxiv.org/abs/{arxiv_id}" if arxiv_id else "",
+            "peer_reviewed": True,
+            "journal": "PRX Quantum",
             "content_hash": content_hash,
             "ingested_at": utc_now(),
         })
@@ -116,12 +130,13 @@ def append_queue(entry):
     with VALIDATION_QUEUE.open("a") as f:
         f.write(json.dumps({
             "id": entry["content_hash"][:16],
-            "source": "arxiv",
+            "source": "prx_quantum",
             "source_url": entry["source_url"],
             "content": entry["content"],
             "content_hash": entry["content_hash"],
             "topic": entry["topic"],
             "arxiv_id": entry["arxiv_id"],
+            "peer_reviewed": True,
             "validation_status": "pending",
             "added_at": utc_now(),
         }, ensure_ascii=False) + "\n")
@@ -132,16 +147,16 @@ def main():
     seen = load_seen_hashes()
     offset = state["offset"]
 
-    print(f"[real_ingest] fetching offset={offset} page_size={PAGE_SIZE}")
+    print(f"[prx_ingest] fetching offset={offset} query='{SEARCH_QUERY}'")
     try:
         xml_data = fetch(offset)
     except Exception as exc:
-        print(f"[real_ingest] fetch error: {exc}", file=sys.stderr)
+        print(f"[prx_ingest] fetch error: {exc}", file=sys.stderr)
         return 1
 
     entries = parse(xml_data)
     if not entries:
-        print("[real_ingest] no entries parsed — resetting offset to 0")
+        print("[prx_ingest] no entries — resetting offset to 0")
         state["offset"] = 0
         save_state(state)
         return 0
@@ -161,7 +176,7 @@ def main():
     state["total_ingested"] = state.get("total_ingested", 0) + added
     save_state(state)
 
-    print(f"[real_ingest] done: added={added} skipped={skipped} next_offset={state['offset']}")
+    print(f"[prx_ingest] done: added={added} skipped={skipped} next_offset={state['offset']}")
     return 0
 
 
