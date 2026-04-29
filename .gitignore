@@ -9,3 +9,8 @@ __pycache__/
 
 # Manual ingest staged outputs (generated at runtime)
 staging/manual/
+
+# Validation runtime state (ephemeral)
+metadata/validation_logs/
+runtime/validation_state.json
+runtime/review_loop_state.json

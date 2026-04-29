@@ -1,0 +1,16 @@
+{
+  "candidate_id": "2a00b4fdaefb34d5",
+  "attempted_at": "2026-04-29T07:26:21.241935+00:00",
+  "url": "https://arxiv.org/abs/2211.02350",
+  "status": "validated",
+  "text_hash": "e21388fcb6c4b16a61f84911449b5b96fa21651a1e6e470dc83936898b155095",
+  "match": {
+    "title_found": true,
+    "title_checked": "Tierkreis",
+    "topic_word_hits": 2,
+    "topic_word_count": 2
+  },
+  "error": null,
+  "promoted": false,
+  "_failure_backoff": 600
+}
